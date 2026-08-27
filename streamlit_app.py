@@ -1,5 +1,5 @@
 import streamlit as st
-from openai import OpenAI
+from openai import OpenAI, AuthenticationError
 from pypdf import PdfReader
 
 # Show title and description.
@@ -23,7 +23,23 @@ def read_pdf(uploaded_file):
 # Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
 # via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
 openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
+
+key_is_valid = False
+
+# check to make sure api key is valid
+if openai_api_key:
+    try:
+        client = OpenAI(api_key=openai_api_key)
+        # Lightweight call just to check if the key works
+        client.models.list()
+        st.success("API key is valid ✅")
+        key_is_valid = True
+    except AuthenticationError:
+        st.error("Invalid OpenAI API key ❌")
+    except Exception as e:
+        st.error(f"Something went wrong: {e}")
+
+if not openai_api_key or not key_is_valid:
     st.info("Please add your OpenAI API key to continue.", icon="🗝️")
 else:
 
@@ -61,7 +77,7 @@ else:
 
         # Generate an answer using the OpenAI API.
         stream = client.chat.completions.create(
-            model="gpt-3.5",
+            model="gpt-3.5-turbo",
             messages=messages,
             stream=True,
         )
