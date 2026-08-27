@@ -77,7 +77,7 @@ else:
 
         # Generate an answer using the OpenAI API.
         stream = client.chat.completions.create(
-            model="gpt-5-nano",
+            model="gpt-5",
             messages=messages,
             stream=True,
         )
