@@ -1,5 +1,17 @@
 import streamlit as st
 from openai import OpenAI, AuthenticationError
+from bs4 import BeautifulSoup
+import requests
+
+def read_url_content(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        soup = BeautifulSoup(response.content, "html.parser")
+        return soup.get_text()
+    except requests.RequestException as e:
+        st.error(f"Error reading {url}: {e}")
+        return None
 
 # Show title and description.
 st.title("HW 2 Document question answering")
@@ -53,21 +65,21 @@ else:
     model = "gpt-4.1-mini" if use_advanced_model else "gpt-4.1-nano"
     st.sidebar.caption(f"Model in use: `{model}`")
 
-    # Let the user upload a file via `st.file_uploader`.
-    uploaded_file = st.file_uploader(
-        "Upload a document (.txt or .md)", type=("txt", "md")
-    )
-
-    if uploaded_file:
-
-        # Process the uploaded file and the chosen summary option.
-        document = uploaded_file.read().decode()
-        messages = [
-            {
-                "role": "user",
-                "content": f"Here's a document: {document} \n\n---\n\n {summary_option}",
-            }
-        ]
+    # Let the user enter a URL instead of uploading a file.
+    url = st.text_input("Enter a URL", placeholder="https://example.com/article")
+ 
+    if url:
+ 
+        # Fetch and parse the page content.
+        document = read_url_content(url)
+ 
+        if document:
+            messages = [
+                {
+                    "role": "user",
+                    "content": f"Here's a URL: {document} \n\n---\n\n {summary_option}",
+                }
+            ]
 
         # Generate an answer using the OpenAI API.
         stream = client.chat.completions.create(
