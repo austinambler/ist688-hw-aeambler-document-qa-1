@@ -65,6 +65,12 @@ else:
     model = "gpt-4.1-mini" if use_advanced_model else "gpt-4.1-nano"
     st.sidebar.caption(f"Model in use: `{model}`")
 
+    # Output language selection.
+    language = st.sidebar.radio(
+        "Choose output language:",
+        ("English", "French", "Spanish"),
+    )
+
     # Let the user enter a URL instead of uploading a file.
     url = st.text_input("Enter a URL", placeholder="https://example.com/article")
  
@@ -73,13 +79,16 @@ else:
         # Fetch and parse the page content.
         document = read_url_content(url)
  
-        if document:
-            messages = [
-                {
-                    "role": "user",
-                    "content": f"Here's a URL: {document} \n\n---\n\n {summary_option}",
-                }
-            ]
+        messages = [
+            {
+                "role": "user",
+                "content": (
+                    f"Here's a document: {document} \n\n---\n\n {summary_option}. "
+                    f"Write your entire response in {language}, regardless of what "
+                    f"language the document is written in."
+                ),
+            }
+        ]
 
         # Generate an answer using the OpenAI API.
         stream = client.chat.completions.create(
