@@ -82,7 +82,7 @@ else:
     if llm == "OpenAI":
         model = "gpt-4.1-mini" if use_advanced_model else "gpt-4.1-nano"
     else:
-        model = "gemini-2.5-flash" if use_advanced_model else "gemini-2.5-flash-lite"
+        model = "gemini-3.6-flash" if use_advanced_model else "gemini-3.5-flash-lite"
     st.sidebar.caption(f"Model in use: `{model}`")
  
     # Output language selection.
