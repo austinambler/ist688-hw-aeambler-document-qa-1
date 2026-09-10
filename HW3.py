@@ -5,6 +5,17 @@ import requests
 
 st.title("My Homework 3 question answering chatbot")
 
+st.write(
+    """
+    **How this app works:**
+    1. Choose an LLM (OpenAI or Gemini) and how many URLs you want to provide (1 or 2) in the sidebar.
+    2. Enter the URL(s) in the sidebar — the app will fetch and read the page content as reference material.
+    3. Once loaded, ask a question about the URL(s) in the chat box below.
+    4. The bot will answer, then ask "Do you want more info?" — say yes for more detail, or no to move to a new question.
+    5. **Conversation memory:** to keep responses fast and within model limits, this app only remembers your **last 3 questions and 3 answers** at a time (a "buffer"). Older messages are dropped from what's sent to the model, but the reference document content is always included so the bot never forgets what page(s) you're asking about.
+    """
+)
+
 llm = st.sidebar.radio("Choose a LLM:", ("OpenAI", "Gemini"))
 url_count = st.sidebar.radio("How many URLs:", (1, 2))
 
