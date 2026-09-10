@@ -7,14 +7,13 @@ st.title("My Homework 3 question answering chatbot")
 
 llm = st.sidebar.radio("Choose a LLM:", ("OpenAI", "Gemini"))
 url_count = st.sidebar.radio("How many URLs:", (1, 2))
- 
+
 openai_api_key = st.secrets.OPEN_AI_KEY
 gemini_api_key = st.secrets.GEMINI_KEY
 
 key_is_valid = False
 client = None
- 
-# check to make sure api key is valid
+
 if llm == "OpenAI":
     if openai_api_key:
         try:
@@ -63,32 +62,38 @@ def read_url_content(url):
         response = requests.get(url)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
-        return soup.get_text()
+        return soup.get_text(separator="\n", strip=True)
     except requests.RequestException as e:
         st.error(f"Error reading {url}: {e}")
         return None
 
-SYSTEM_PROMPT = """You are a helpful assistant that reads and explains web page content.
+SYSTEM_PROMPT = """You are a helpful assistant that answers questions about web page content the user has provided.
 
+Style rules:
+- Use simple, everyday words and short sentences.
+- Avoid jargon and technical terms; if you must use one, explain it simply right after.
+- Use relatable examples or comparisons (like toys, games, animals, or everyday situations) to make ideas easier to picture.
+- Keep a friendly, encouraging tone.
 
 Conversation pattern:
-1. When the user provides document content (from one or two URLs), read it and give a clear, simple summary of what it says. If two documents are provided, summarize each one and briefly note how they relate or differ.
-2. After giving the summary, ask: "Do you want more info?"
-3. If the user says yes (or anything affirmative):
-   - Go deeper into the same document content — add more detail, examples, or explanation, still in simple language.
+1. The user has provided the content of one or two web pages as reference material. Wait for the user to ask a question about that content.
+2. Answer the question clearly and simply, using only the provided document content as your source. If the answer isn't in the document(s), say so honestly instead of guessing.
+3. After answering, ask: "Do you want more info?"
+4. If the user says yes (or anything affirmative):
+   - Provide additional relevant detail from the document(s) on the same topic, still explained simply.
    - Then ask again: "Do you want more info?"
    - Repeat this loop for as long as the user keeps saying yes.
-4. If the user says no (or anything negative):
-   - Respond with something like "Sounds good!" and then ask: "What can I help you with? Enter a new URL anytime."
-   - Wait for a new question or a new URL and start the pattern over from step 1.
+5. If the user says no (or anything negative):
+   - Respond with something like "Sounds good!" and then ask: "What else do you want to know about the document(s)?"
+   - Wait for a new question and start the pattern over from step 1.
 
-Always keep track of which document(s) are currently being discussed so "more info" responses stay relevant, until the user submits a new URL or asks something unrelated.
+Always keep track of the current topic so "more info" responses stay relevant, until the user asks something new.
 """
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "assistant", "content": "What can I help you with?"}
+        {"role": "assistant", "content": "Enter your URL(s) on the left, then ask me a question about them!"}
     ]
 
 for msg in st.session_state.messages:
@@ -110,17 +115,17 @@ def get_buffered_messages(messages, max_messages=max_messages):
 
     return system_msgs + trimmed
 
-# Let the user enter one or two URLs instead of uploading a file.
-url_1 = st.text_input("Enter a URL", placeholder="https://example.com/article")
+# Let the user enter one or two URLs as reference material.
+url_1 = st.sidebar.text_input("Enter a URL", placeholder="https://example.com/article")
 
 url_2 = None
 if url_count == 2:
-    url_2 = st.text_input("Enter a second URL", placeholder="https://example.com/another-article")
+    url_2 = st.sidebar.text_input("Enter a second URL", placeholder="https://example.com/another-article")
 
-# only proceed once required URL fields are filled in, and only once per URL set
 ready = url_1 and (url_count == 1 or (url_count == 2 and url_2))
 current_urls = (url_1, url_2)
 
+# read the URL(s) once per unique URL combination, and store as context (not a chat turn)
 if ready and st.session_state.get("last_urls") != current_urls:
     document_1 = read_url_content(url_1)
 
@@ -140,40 +145,19 @@ if ready and st.session_state.get("last_urls") != current_urls:
             f"---\n\n"
             f"Document 2 (from {url_2}):\n{document_2}"
         )
-        display_text = f"Summarize these URLs: {url_1} and {url_2}"
     else:
-        combined_document = document_1
-        display_text = f"Summarize this URL: {url_1}"
+        combined_document = f"Document (from {url_1}):\n{document_1}"
 
-    user_message = {
-        "role": "user",
-        "content": (
-            f"Here's the document content: {combined_document}"
-        ),
-    }
+    st.session_state.document_context = combined_document
+    st.session_state.last_urls = current_urls
+    st.success("URL(s) loaded! Ask me a question about them below.")
 
-    st.session_state.messages.append(user_message)
-    st.session_state.last_urls = current_urls  # remember so we don't re-summarize on every rerun
+# Chat input for asking questions about the loaded document(s)
+if prompt := st.chat_input("Ask a question about the URL(s)..."):
+    if "document_context" not in st.session_state:
+        st.warning("Please enter and load a URL first before asking a question.")
+        st.stop()
 
-    with st.chat_message("user"):
-        st.markdown(display_text)
-
-    client = st.session_state.client
-    buffered_messages = get_buffered_messages(st.session_state.messages)
-
-    stream = client.chat.completions.create(
-        model=st.session_state.model_name,
-        messages=buffered_messages,
-        stream=True,
-    )
-
-    with st.chat_message("assistant"):
-        response = st.write_stream(stream)
-
-    st.session_state.messages.append({"role": "assistant", "content": response})
-
-# Chat input for follow-up messages (e.g. "yes"/"no" to "Do you want more info?")
-if prompt := st.chat_input("Type your reply here (e.g. yes / no), or ask a question..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
@@ -182,9 +166,17 @@ if prompt := st.chat_input("Type your reply here (e.g. yes / no), or ask a quest
     client = st.session_state.client
     buffered_messages = get_buffered_messages(st.session_state.messages)
 
+    # inject the document content as context right after the system prompt,
+    # without permanently bloating the stored chat history on every turn
+    context_message = {
+        "role": "system",
+        "content": f"Reference document content:\n\n{st.session_state.document_context}"
+    }
+    api_messages = [buffered_messages[0], context_message] + buffered_messages[1:]
+
     stream = client.chat.completions.create(
         model=st.session_state.model_name,
-        messages=buffered_messages,
+        messages=api_messages,
         stream=True,
     )
 
