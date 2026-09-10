@@ -1,5 +1,7 @@
 import streamlit as st
 from openai import OpenAI, AuthenticationError
+from bs4 import BeautifulSoup
+import requests
 
 st.title("My Homework 3 question answering chatbot")
 
@@ -57,6 +59,16 @@ if "current_llm" not in st.session_state or st.session_state.current_llm != llm:
         )
         st.session_state.model_name = "gemini-3.6-flash"
 
+def read_url_content(url):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        soup = BeautifulSoup(response.content, "html.parser")
+        return soup.get_text()
+    except requests.RequestException as e:
+        st.error(f"Error reading {url}: {e}")
+        return None
+
 SYSTEM_PROMPT = """You are a helpful assistant. Follow this conversation pattern strictly:
 
 - Use simple, everyday words and short sentences.
@@ -105,20 +117,36 @@ def get_buffered_messages(messages, max_messages = max_messages):
 
     return system_msgs + trimmed
 
-if prompt := st.chat_input("What is up?"):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# Let the user enter a URL instead of uploading a file.
+url = st.text_input("Enter a URL", placeholder="https://example.com/article")
+
+if url:
+    # Fetch and parse the page content.
+    document = read_url_content(url)
+
+    if not document:
+        st.warning("Could not retrieve content from that URL. Try a different link.")
+        st.stop()
+
+    user_message = {
+        "role": "user",
+        "content": (
+            f"Here's a document: {document}\n\n---\n\n. "
+        ),
+    }
+
+    st.session_state.messages.append(user_message)
 
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(f"Summarize this URL: {url}")
 
     client = st.session_state.client
-
     buffered_messages = get_buffered_messages(st.session_state.messages)
 
     stream = client.chat.completions.create(
-        model = st.session_state.model_name,
-        messages = buffered_messages,
-        stream = True
+        model=st.session_state.model_name,
+        messages=buffered_messages,
+        stream=True,
     )
 
     with st.chat_message("assistant"):
