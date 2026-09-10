@@ -6,6 +6,7 @@ import requests
 st.title("My Homework 3 question answering chatbot")
 
 llm = st.sidebar.radio("Choose a LLM:", ("OpenAI", "Gemini"))
+url_count = st.sidebar.radio("How many URLs:", (1, 2))
  
 openai_api_key = st.secrets.OPEN_AI_KEY
 gemini_api_key = st.secrets.GEMINI_KEY
@@ -117,28 +118,51 @@ def get_buffered_messages(messages, max_messages = max_messages):
 
     return system_msgs + trimmed
 
-# Let the user enter a URL instead of uploading a file.
-url = st.text_input("Enter a URL", placeholder="https://example.com/article")
+# Let the user enter one or two URLs instead of uploading a file.
+url_1 = st.text_input("Enter a URL", placeholder="https://example.com/article")
 
-if url:
-    # Fetch and parse the page content.
-    document = read_url_content(url)
+url_2 = None
+if url_count == 2:
+    url_2 = st.text_input("Enter a second URL", placeholder="https://example.com/another-article")
 
-    if not document:
-        st.warning("Could not retrieve content from that URL. Try a different link.")
+# only proceed once required URL fields are filled in
+ready = url_1 and (url_count == 1 or (url_count == 2 and url_2))
+
+if ready:
+    document_1 = read_url_content(url_1)
+
+    if not document_1:
+        st.warning(f"Could not retrieve content from {url_1}. Try a different link.")
         st.stop()
+
+    if url_count == 2:
+        document_2 = read_url_content(url_2)
+
+        if not document_2:
+            st.warning(f"Could not retrieve content from {url_2}. Try a different link.")
+            st.stop()
+
+        combined_document = (
+            f"Document 1 (from {url_1}):\n{document_1}\n\n"
+            f"---\n\n"
+            f"Document 2 (from {url_2}):\n{document_2}"
+        )
+        display_text = f"Summarize these URLs: {url_1} and {url_2}"
+    else:
+        combined_document = document_1
+        display_text = f"Summarize this URL: {url_1}"
 
     user_message = {
         "role": "user",
         "content": (
-            f"Here's a document: {document}\n\n---\n\n. "
+            f"Here's the document content: {combined_document}"
         ),
     }
 
     st.session_state.messages.append(user_message)
 
     with st.chat_message("user"):
-        st.markdown(f"Summarize this URL: {url}")
+        st.markdown(display_text)
 
     client = st.session_state.client
     buffered_messages = get_buffered_messages(st.session_state.messages)
