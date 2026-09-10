@@ -19,7 +19,6 @@ if llm == "OpenAI":
     if openai_api_key:
         try:
             client = OpenAI(api_key=openai_api_key)
-            # Lightweight call just to check if the key works
             client.models.list()
             st.success("OpenAI API key is valid ✅")
             key_is_valid = True
@@ -35,7 +34,6 @@ else:
                 api_key=gemini_api_key,
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             )
-            # Lightweight call just to check if the key works
             client.models.list()
             st.success("Gemini API key is valid ✅")
             key_is_valid = True
@@ -63,32 +61,28 @@ if "current_llm" not in st.session_state or st.session_state.current_llm != llm:
 def read_url_content(url):
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for HTTP errors
+        response.raise_for_status()
         soup = BeautifulSoup(response.content, "html.parser")
         return soup.get_text()
     except requests.RequestException as e:
         st.error(f"Error reading {url}: {e}")
         return None
 
-SYSTEM_PROMPT = """You are a helpful assistant. Follow this conversation pattern strictly:
+SYSTEM_PROMPT = """You are a helpful assistant that reads and explains web page content.
 
-- Use simple, everyday words and short sentences.
-- Avoid jargon and technical terms; if you must use one, explain it simply right after.
-- Use relatable examples or comparisons (like toys, games, animals, or everyday situations) to make ideas easier to picture.
-- Keep a friendly, encouraging tone.
 
-1. Wait for the user to ask a question.
-2. Answer the question clearly and concisely.
-3. After answering, ask: "Do you want more info?"
-4. If the user says yes (or anything affirmative):
-   - Provide additional, more detailed information on the same topic.
+Conversation pattern:
+1. When the user provides document content (from one or two URLs), read it and give a clear, simple summary of what it says. If two documents are provided, summarize each one and briefly note how they relate or differ.
+2. After giving the summary, ask: "Do you want more info?"
+3. If the user says yes (or anything affirmative):
+   - Go deeper into the same document content — add more detail, examples, or explanation, still in simple language.
    - Then ask again: "Do you want more info?"
    - Repeat this loop for as long as the user keeps saying yes.
-5. If the user says no (or anything negative):
-   - Respond with something like "Sounds good!" and then ask: "What can I help you with?"
-   - Wait for a new question and start the pattern over from step 1.
+4. If the user says no (or anything negative):
+   - Respond with something like "Sounds good!" and then ask: "What can I help you with? Enter a new URL anytime."
+   - Wait for a new question or a new URL and start the pattern over from step 1.
 
-Always keep track of the current topic so that "more info" responses stay relevant to the original question, until the user moves on to a new question.
+Always keep track of which document(s) are currently being discussed so "more info" responses stay relevant, until the user submits a new URL or asks something unrelated.
 """
 
 if "messages" not in st.session_state:
@@ -104,11 +98,9 @@ for msg in st.session_state.messages:
     chat_msg.write(msg["content"])
 
 # set buffer limit
-max_messages = 2
+max_messages = 3  # 6 total - 3 for each user and assistant
 
-# define function to get buffered messages
-def get_buffered_messages(messages, max_messages = max_messages):
-
+def get_buffered_messages(messages, max_messages=max_messages):
     system_msgs = [m for m in messages if m["role"] == "system"]
     user_idxs = [i for i, m in enumerate(messages) if m["role"] == "user"][-max_messages:]
     assistant_idxs = [i for i, m in enumerate(messages) if m["role"] == "assistant"][-max_messages:]
@@ -125,10 +117,11 @@ url_2 = None
 if url_count == 2:
     url_2 = st.text_input("Enter a second URL", placeholder="https://example.com/another-article")
 
-# only proceed once required URL fields are filled in
+# only proceed once required URL fields are filled in, and only once per URL set
 ready = url_1 and (url_count == 1 or (url_count == 2 and url_2))
+current_urls = (url_1, url_2)
 
-if ready:
+if ready and st.session_state.get("last_urls") != current_urls:
     document_1 = read_url_content(url_1)
 
     if not document_1:
@@ -160,9 +153,31 @@ if ready:
     }
 
     st.session_state.messages.append(user_message)
+    st.session_state.last_urls = current_urls  # remember so we don't re-summarize on every rerun
 
     with st.chat_message("user"):
         st.markdown(display_text)
+
+    client = st.session_state.client
+    buffered_messages = get_buffered_messages(st.session_state.messages)
+
+    stream = client.chat.completions.create(
+        model=st.session_state.model_name,
+        messages=buffered_messages,
+        stream=True,
+    )
+
+    with st.chat_message("assistant"):
+        response = st.write_stream(stream)
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
+
+# Chat input for follow-up messages (e.g. "yes"/"no" to "Do you want more info?")
+if prompt := st.chat_input("Type your reply here (e.g. yes / no), or ask a question..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
     client = st.session_state.client
     buffered_messages = get_buffered_messages(st.session_state.messages)
