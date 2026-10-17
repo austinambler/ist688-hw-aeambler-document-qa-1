@@ -491,10 +491,7 @@ st.title("News Reporting Bot")
 model_label = st.sidebar.selectbox(
     "Chat model",
     list(MODEL_OPTIONS),
-    key="news_model_label",
-    help="Low cost is cheaper and faster. High cost is usually better at "
-         "summarizing and giving context. Search and ranking use the same "
-         "database either way.",
+    key="news_model_label"
 )
 openAI_model = MODEL_OPTIONS[model_label]
 
