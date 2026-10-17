@@ -38,7 +38,11 @@ SCORES_CACHE = "scores_cache.json"
 
 EMBED_MODEL = "text-embedding-3-small"
 SCORE_MODEL = "gpt-4o-mini"
-CHAT_MODEL = "gpt-4o-mini"
+# Chat models offered in the sidebar (label -> OpenAI model name)
+MODEL_OPTIONS = {
+    "Low cost (gpt-4o-mini)": "gpt-4o-mini",
+    "High cost (gpt-4o)": "gpt-4o",
+}
 
 # Coverage bonus tuning: two articles count as "the same story" above this
 # cosine similarity. NOT validated against your data -- run with
@@ -497,6 +501,17 @@ import chromadb
 
 st.title("News Reporting Bot")
 
+# Sidebar: pick the chat model (key is page-specific since session_state is shared)
+model_label = st.sidebar.selectbox(
+    "Chat model",
+    list(MODEL_OPTIONS),
+    key="news_model_label",
+    help="Low cost is cheaper and faster. High cost is usually better at "
+         "summarizing and giving context. Search and ranking use the same "
+         "database either way.",
+)
+openAI_model = MODEL_OPTIONS[model_label]
+
 if 'openai_client' not in st.session_state:
     api_key = st.secrets["OPEN_AI_KEY"]
     st.session_state.openai_client = OpenAI(api_key=api_key)
@@ -560,7 +575,7 @@ if prompt := st.chat_input("Ask about the news..."):
 
     # --- Step 1: let the LLM decide which tool(s) to call ---
     first_response = client.chat.completions.create(
-        model=CHAT_MODEL,
+        model=openAI_model,
         messages=buffered_messages,
         tools=TOOLS,
         tool_choice="auto"
@@ -600,14 +615,14 @@ if prompt := st.chat_input("Ask about the news..."):
 
         # --- Step 2: give the LLM the tool results and let it answer.
         stream = client.chat.completions.create(
-            model=CHAT_MODEL,
+            model=openAI_model,
             messages=messages_with_tool_result,
             stream=True
         )
     else:
         # The model chose to answer without retrieving anything.
         stream = client.chat.completions.create(
-            model=CHAT_MODEL,
+            model=openAI_model,
             messages=buffered_messages,
             stream=True
         )
