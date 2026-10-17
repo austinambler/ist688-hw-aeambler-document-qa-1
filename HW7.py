@@ -1,17 +1,3 @@
-"""
-build_db.py  --  the whole news bot as ONE page of a multipage Streamlit app.
-
-Put this file in your pages/ folder (or register it with st.Page) and keep
-news.csv in the folder you run `streamlit run app.py` from.
-
-First visit: the ChromaDB database does not exist yet, so this page builds it
-             automatically (cleans news.csv, scores each article's
-             interestingness with an LLM, embeds everything). A few minutes,
-             and it runs ONCE.
-Later visits: the database already exists, so the page just loads it.
-
-API key: OPEN_AI_KEY in .streamlit/secrets.toml (or the OPENAI_API_KEY env var).
-"""
 import sys
 
 try:  # Streamlit Cloud / some Codespaces need pysqlite3 for ChromaDB
